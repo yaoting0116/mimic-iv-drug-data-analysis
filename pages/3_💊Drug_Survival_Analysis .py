@@ -59,7 +59,11 @@ def make_cox_section_V2(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     design_matrix = design_matrix.select_dtypes(exclude="datetime")
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
-
+        
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -115,6 +119,10 @@ def make_cox_section_V3(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -169,6 +177,10 @@ def make_cox_section_V4(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -223,6 +235,10 @@ def make_cox_section_V5(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -277,6 +293,10 @@ def make_cox_section_V6(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -332,6 +352,10 @@ def make_cox_section_V7(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -386,6 +410,10 @@ def make_cox_section_V8(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
@@ -440,6 +468,10 @@ def make_cox_section_V9(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, ...]:
     if design_matrix.attrs["event_col"] != "E":
         design_matrix.drop(columns="E", inplace=True)
 
+    # CoxPHFitter fails to converge when the values in gender column are all the same.
+    if design_matrix.attrs["gender_selected"] != Gender.ALL:
+        design_matrix = design_matrix.drop("gender", axis=1)
+    
     kwargs = {
         "duration_col": "T",
         "event_col": design_matrix.attrs["event_col"],
