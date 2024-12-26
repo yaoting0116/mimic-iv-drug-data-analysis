@@ -21,7 +21,7 @@ jsonschema==4.21.1
 jsonschema-specifications==2023.12.1
 kiwisolver==1.4.5
 lifelines==0.27.7
-matplotlib==3.7.2
+matplotlib==3.8.3
 more_itertools==10.5.0
 markdown-it-py==3.0.0
 MarkupSafe==2.1.5
