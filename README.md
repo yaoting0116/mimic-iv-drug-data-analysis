@@ -1,6 +1,6 @@
 # MIMIC IV Data Analysis (Modified Version) 
 
-This is a modified version of the original  [MIMIC IV Data Analysis](https://sunrimii-mimic-iv-data-analysis-0--introduction-yx89v6.streamlitapp.com/) project. 
+This is a modified version of the original  [MIMIC IV Data Analysis](https://mimic-iv-drug-data-analysis-0--introduction-uwu-ting.streamlit.app/) project. 
 The changes include updates to the dataset, removal of some original code, and adjustments to suit new requirements.
 
 ## Key Changes
