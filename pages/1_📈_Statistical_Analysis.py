@@ -1,20 +1,26 @@
 from __future__ import annotations
-from importlib import import_module
-from typing import Callable, cast
-import matplotlib.pyplot as plt
-import numpy as np
+from dataclasses import dataclass
 import pandas as pd
 import streamlit as st
-from lifelines import CoxPHFitter, KaplanMeierFitter
-from scipy.stats import chi2_contingency
+import warnings
 from pandas.io.formats.style import Styler
+from itertools import groupby
 from enum import Enum
+from more_itertools import chunked
+from scipy.stats import (
+    chi2_contingency,
+    fisher_exact,
+    ks_2samp,
+    mannwhitneyu,
+    ttest_ind,
+)
+
+
+def highlight_small_p(styler: Styler) -> Styler:
+    return styler.highlight_between("p", left=0, right=0.0001) and styler.highlight_between("p", left=0.9900, right=1)
 
 def to_percentage(df: pd.DataFrame) -> Styler:
     return df.apply(lambda col: col / col.sum()).mul(100).round(1).style.format("{}%")
-
-def highlight_small_p(styler: Styler) -> Styler:
-    return styler.highlight_between("p", left=0, right=0.0001)
 
 def format_small_values(styler: Styler) -> Styler:
     """
@@ -28,6 +34,8 @@ def format_small_values(styler: Styler) -> Styler:
     for col in cols:
         subset = pd.IndexSlice[styler.data[col].between(0, 0.0001, inclusive="left"), col]
         styler = styler.format("< 0.0001", subset)
+        subset = pd.IndexSlice[styler.data[col].between(0.9900, 1, inclusive="right"), col]
+        styler = styler.format("> 0.9900", subset)
     return styler
 
 class StreamlitEnum(str, Enum):
@@ -46,237 +54,385 @@ class Gender(StreamlitEnum):
     MALE = "male"
     FEMALE = "female"
 
-def import_funcs_from_statistical_analysis() -> tuple[
-    Callable, Callable, Callable, Callable
-]:
-    page = import_module(".1_📈_Statistical_Analysis", "pages")
-    return (
-        page.read_design_matrix,
-        page.filter_gender,
-        page.filter_age,
-        page.crop_event,
-    )
-
-def make_km_section(
-    design_matrix: pd.DataFrame,
-) -> tuple[KaplanMeierFitter, KaplanMeierFitter]:
-    design_matrix.attrs["predictor_col"] = "with_psychosis"
-    predictor_col = design_matrix.attrs["predictor_col"]
-    case = design_matrix.query(predictor_col)
-    control = design_matrix.query(f"~{predictor_col}")
-
-    case_fitter = KaplanMeierFitter()
-    control_fitter = KaplanMeierFitter()
-    event_col = design_matrix.attrs["event_col"]
-    case_fitter.fit(case["T"], case[event_col], label="case")
-    control_fitter.fit(control["T"], control[event_col], label="control")
-
-    return case_fitter, control_fitter
-
-def show_km_section(
-    case_fitter: KaplanMeierFitter, control_fitter: KaplanMeierFitter
-) -> None:
-    fig, ax = plt.subplots()
-    ax = case_fitter.plot_survival_function(ax=ax)
-    ax = control_fitter.plot_survival_function(ax=ax)
-    ax.set_xlabel("days")
-    ax.set_ylabel("survival rate")
-    ax.grid()
-    st.markdown("")
-    st.header("Kaplan-Meier Estimator")
-    st.pyplot(fig)
-    st.markdown("---")
-    
-def make_deconstructing_logrank_section(
-    design_matrix: pd.DataFrame,
-) -> pd.DataFrame:
-    design_matrix.attrs["predictor_col"] = "with_psychosis"
-    predictor_col = design_matrix.attrs["predictor_col"]
-    case = design_matrix.query(predictor_col)
-    control = design_matrix.query(f"~{predictor_col}")
-    event_col = design_matrix.attrs["event_col"]
-    case_have_event = case.query(event_col)
-    control_have_event = control.query(event_col)
-
-    def calc_cumulative_histogram(group: pd.DataFrame):
-        max_duration = int(design_matrix["T"].max())
-        bins = range(max_duration + 2)
-        hist, _ = np.histogram(group["T"], bins)
-        return np.cumsum(hist)
-
-    nhappen_cum = pd.DataFrame(
-        {
-            "case": calc_cumulative_histogram(case_have_event),
-            "control": calc_cumulative_histogram(control_have_event),
-        }
-    )
-    total = len(case), len(control)
-    nriskset_cum = total - nhappen_cum
-
-    chi2values = []
-    pvalues = []
-    for observed in zip(nhappen_cum.values, nriskset_cum.values):
-        try:
-            chi2, p, _, _ = chi2_contingency(observed)
-            chi2, p = cast(float, chi2), cast(float, p)
-        except ValueError:
-            chi2, p = 0, 0
-        finally:
-            chi2values.append(chi2)
-            pvalues.append(p)
-
-    chi2_df = pd.DataFrame(
-        {
-            "case_nhappen": nhappen_cum["case"],
-            "control_nhappen": nhappen_cum["control"],
-            "case_riskset": nriskset_cum["case"],
-            "control_riskset": nriskset_cum["control"],
-            "chi2": chi2values,
-            "p": pvalues,
-        }
-    )
-
-    assert chi2_df["case_nhappen"].iloc[-1] == len(case_have_event)
-    assert chi2_df["control_nhappen"].iloc[-1] == len(control_have_event)
-
-    assert chi2_df["case_nhappen"].idxmax() == case_have_event["T"].max()
-    assert chi2_df["control_nhappen"].idxmax() == control_have_event["T"].max()
-
-    return chi2_df
-
-def show_deconstructing_logrank_section(chi2_df: pd.DataFrame) -> None:
-    fig, axs = plt.subplots(2, 1, sharex=True, constrained_layout=True)
-    axs[0].plot(chi2_df["chi2"])
-    axs[1].plot(chi2_df["p"])
-    axs[1].axhline(
-        0.05, color="red", label="$ p = 0.05 $", linewidth=0.8, linestyle="--"
-    )
-    axs[1].set_xlabel("days")
-    axs[0].grid()
-    axs[1].grid()
-    axs[1].legend()
-    axs[0].set_ylabel("chi2")
-    axs[1].set_ylabel("p")
-
-    # add percentage suffix
-    nhappen = chi2_df[["case_nhappen", "control_nhappen"]]  # shorthand
-    nhappen = (
-        nhappen.astype(str)
-        + "("
-        + nhappen.div(nhappen.iloc[-1]).mul(100).round().astype(int).astype(str)
-        + "%)"
-    )
-    chi2_df[["case_nhappen", "control_nhappen"]] = nhappen  # writeback
-
-    st.header("Deconstructing Logrank Test")
-    st.pyplot(fig)
-    st.dataframe(chi2_df.style.pipe(format_small_values).pipe(highlight_small_p))
-    st.markdown("---")
-
-def make_cox_section(design_matrix: pd.DataFrame) -> tuple[CoxPHFitter, CoxPHFitter]:
-    design_matrix = design_matrix.select_dtypes(exclude="datetime")
-    if design_matrix.attrs["event_col"] != "E":
-        design_matrix.drop(columns="E", inplace=True)
-
-    # CoxPHFitter fails to converge when the values in gender column are all the same.
-    if design_matrix.attrs["gender_selected"] != Gender.ALL:
-        design_matrix = design_matrix.drop("gender", axis=1)
-
-    kwargs = {
-        "duration_col": "T",
-        "event_col": design_matrix.attrs["event_col"],
-        # adjust step_size if delta contains nan value
-        "fit_options": {"step_size": 0.25},
+def read_design_matrix() -> pd.DataFrame:
+    topic_to_pickle_fname = {
+        "Psychosis & Ischemic Stroke": "Ischemic_Stroke_join_drug_V5",
+        "Psychosis & Hemorrhagic Stroke": "Hemorrhagic_Stroke_join_drug_V5",
     }
+    if "topic_index" not in st.session_state:
+        st.session_state["topic_index"] = 1
+        st.session_state["topic_index"] = 0
 
-    covariates = [
-        "hypertension",
-        "heart_type_disease",
-        "neurological_type_disease",
-        "diabetes",
-        "hyperlipidemia",
-    ]
-    design_matrix.attrs["with_covariate_cols"] = [f"with_{c}" for c in covariates]
-    design_matrix.attrs["covariate_times_cols"] = [f"{c}_times" for c in covariates]
-
-    with_covariate_fitter = CoxPHFitter()
-    covariate_times_cols = design_matrix.attrs["covariate_times_cols"]
-    with_covariate_fitter.fit(
-        design_matrix.drop(columns=covariate_times_cols), **kwargs
-    )
-
-    covariate_times_fitter = CoxPHFitter()
-    with_covariate_cols = design_matrix.attrs["with_covariate_cols"]
-    covariate_times_fitter.fit(
-        design_matrix.drop(columns=with_covariate_cols), **kwargs
-    )
-
-    return with_covariate_fitter, covariate_times_fitter
-
-format_dict = {'exp(coef)': '{:.4f}', 'exp(coef) lower 95%': '{:.4f}', 'exp(coef) upper 95%': '{:.4f}', 'p': '{:.4f}'}
-
-def show_cox_section(
-    with_covariate_fitter: CoxPHFitter, *covariate_times_fitters: CoxPHFitter
-) -> None:
-    interested_cols = ["exp(coef)", "exp(coef) lower 95%", "exp(coef) upper 95%", "p"]
-
-    st.dataframe(
-        with_covariate_fitter.summary[interested_cols].style.pipe(format_small_values).pipe(highlight_small_p),
-    )
-
-    for i, covariate_fitter in enumerate(covariate_times_fitters):
-        st.dataframe(
-            covariate_fitter.summary[interested_cols]
-            .style.pipe(format_small_values)
-            .pipe(highlight_small_p),
+    def on_change() -> None:
+        topic_selected = st.session_state["topic-radio"]
+        st.session_state["topic_index"] = list(topic_to_pickle_fname).index(
+            topic_selected
         )
 
-    st.markdown("---")
+    topic_selected: str = st.sidebar.radio(
+        "topic",
+        options=topic_to_pickle_fname,
+        index=st.session_state["topic_index"],
+        key="topic-radio",  # to identify widgets on session state
+        on_change=on_change,
+    )
+    design_matrix = pd.read_pickle(f"data/{topic_to_pickle_fname[topic_selected]}.pkl",compression='gzip') # Your own folder path
 
-def make_data_view_section(
+    # for slider usage
+    design_matrix.attrs["max_duration"] = int(design_matrix["T"].max())
+
+    return design_matrix
+
+
+def filter_gender(design_matrix: pd.DataFrame) -> pd.DataFrame:
+    if "gender_index" not in st.session_state:
+        st.session_state["gender_index"] = 0
+
+    def on_change() -> None:
+        gender_selected = st.session_state["gender-radio"]
+        st.session_state["gender_index"] = Gender.to_list().index(gender_selected)
+
+    gender_selected: Gender = st.sidebar.radio(
+        "gender",
+        options=Gender.to_list(),
+        index=st.session_state["gender_index"],
+        key="gender-radio",  # to identify widgets on session state
+        on_change=on_change,
+    )
+    design_matrix.attrs["gender_selected"] = gender_selected
+    match gender_selected:
+        case Gender.ALL:
+            return design_matrix
+        case Gender.MALE:
+            return design_matrix.query("gender == 1")
+        case Gender.FEMALE:
+            return design_matrix.query("gender == 0")
+        case _:
+            raise AttributeError
+
+def filter_age(design_matrix: pd.DataFrame) -> pd.DataFrame:
+    if "age_threshold" not in st.session_state:
+        st.session_state["age_threshold"] = 18, 110
+
+    def on_change() -> None:
+        st.session_state["age_threshold"] = st.session_state["age-slider"]
+
+    age_threshold: tuple[int, int] = st.sidebar.slider(
+        "age",
+        min_value=18,
+        max_value=110,
+        value=st.session_state["age_threshold"],
+        key="age-slider",
+        on_change=on_change,
+    )
+    return design_matrix.query(f"{age_threshold[0]} <= age <= {age_threshold[1]}")
+
+def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
+    max_duration = design_matrix.attrs["max_duration"]
+    upper = st.sidebar.slider(
+        "duration",  # Description text displayed
+        min_value=1,  # Fixed starting from 1
+        max_value=max_duration,
+        value=max_duration,  # Default is maximum
+        step=90,
+    )
+
+    # Fixed lower to 1
+    lower = 1
+
+    # assemble thresholds of duration to event column
+    if not (1 <= lower < upper <= max_duration):  # Make sure the range is correct
+        st.error("Please select the correct threshold for duration.")
+        st.stop()
+    if lower == 1 and upper == max_duration:  # When lower is 1, it is considered the default
+        event_col = "E"
+    elif lower == 1 and upper > 1:
+        event_col = f"E{upper}"
+    else:
+        event_col = f"E{lower}-{upper}"
+    design_matrix.attrs["event_col"] = event_col
+
+    # E is original event column. If threshold isn't the default, add additional event
+    # column such as E90 or E91-180.
+    if event_col != "E":
+        design_matrix[event_col] = False
+        design_matrix.loc[
+            (design_matrix["E"] == True)
+            & (lower <= design_matrix["T"])
+            & (design_matrix["T"] <= upper),
+            event_col,
+        ] = True
+        # Find the index position of column "E" and insert the new column after it
+        e_col_index = design_matrix.columns.get_loc("E") + 1
+        design_matrix.insert(e_col_index, event_col, design_matrix.pop(event_col))
+    return design_matrix
+
+@dataclass
+class StatSubSection:
+    """stat_section is composed of multiple StatSubSections."""
+
+    subheader: str
+    crosstab: pd.DataFrame
+    stat_result: pd.DataFrame
+
+def make_catgorical_stat_results_3(filtered_values_T,filtered_values_F):
+
+    t_res = ttest_ind(filtered_values_T, filtered_values_F)
+    ks_res = ks_2samp(filtered_values_T, filtered_values_F)
+    u_res = mannwhitneyu(filtered_values_T, filtered_values_F)
+
+    return pd.DataFrame(
+        [
+            [t_res.statistic, t_res.pvalue],
+            [u_res.statistic, u_res.pvalue],
+            [ks_res.statistic, ks_res.pvalue],
+        ],
+        index=["t test", "U test", "KS test"],
+        columns=["stat", "p"],
+    )
+
+def t_u_ks_statistics_3(drug_names,drug_statistics):
+
+    # Do statistics on column_C when column_P is True and column_A is True
+    condition_true_true = (design_matrix['with_psychosis'] & design_matrix[drug_names])
+    # Do statistics on column_C when column_P is False and column_A is True
+    condition_false_true = (~design_matrix['with_psychosis'] & design_matrix[drug_names])
+
+    # Filter DataFrame based on conditions
+    filtered_true_true = design_matrix[condition_true_true]
+    filtered_false_true = design_matrix[condition_false_true]
+
+    control= filtered_false_true[f'{drug_names}_{drug_statistics}'].tolist()
+    case= filtered_true_true[f'{drug_names}_{drug_statistics}'].tolist()
+
+    return case,control
+
+def make_stat_section(
     design_matrix: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    
+) -> list[StatSubSection]:
+    subsections: list[StatSubSection] = []
+
     design_matrix.attrs["predictor_col"] = "with_psychosis"
     predictor_col = design_matrix.attrs["predictor_col"]
     case = design_matrix.query(predictor_col)
     control = design_matrix.query(f"~{predictor_col}")
-    return case, control
 
-def show_data_view_section(case_df: pd.DataFrame, control_df: pd.DataFrame) -> None:
-    st.header("Data View")
-    st.subheader("Case")
-    if st.checkbox("show", key="case"):
-        st.dataframe(case_df, height=600)
-    st.subheader("Control")
-    if st.checkbox("show", key="control"):
-        st.dataframe(control_df, height=600)
+    # age
+    crosstab = (
+        design_matrix.groupby(predictor_col)["age"]
+        .agg(("mean", "std"))
+        .transpose()
+        .rename(columns={True: "case", False: "control"})
+    )
+
+    t_res = ttest_ind(case["age"], control["age"])
+    ks_res = ks_2samp(case["age"], control["age"])
+    u_res = mannwhitneyu(case["age"], control["age"])
+    stat_results = pd.DataFrame(
+        [
+            [t_res.statistic, t_res.pvalue],
+            [u_res.statistic, u_res.pvalue],
+            [ks_res.statistic, ks_res.pvalue],
+        ],
+        index=["t test", "U test", "KS test"],
+        columns=["stat", "p"],
+    )
+    subsection = StatSubSection("Age", crosstab, stat_results)
+    subsections.append(subsection)
+
+    def make_catgorical_stat_results(crosstab: pd.DataFrame) -> pd.DataFrame:
+        chi2_res = chi2_contingency(crosstab, correction=False)
+        fe_res = fisher_exact(crosstab)
+        return pd.DataFrame(
+            [
+                [chi2_res[0], chi2_res[1]],
+                [fe_res[0], fe_res[1]],
+            ],
+            index=["chi2 test", "Fisher exact test"],
+            columns=["stat", "p"],
+        )
+
+    # gender
+    if design_matrix.attrs["gender_selected"] == Gender.ALL:
+        crosstab = pd.crosstab(
+            design_matrix["gender"], design_matrix[predictor_col]
+        ).rename(
+            index={1: "male", 0: "female"}, columns={True: "case", False: "control"}
+        )
+        stat_result = make_catgorical_stat_results(crosstab)
+        subsection = StatSubSection("Gender", crosstab, stat_result)
+        subsections.append(subsection)
+
+    # event
+    event_col = design_matrix.attrs["event_col"]
+    crosstab = pd.crosstab(
+        design_matrix[event_col], design_matrix[predictor_col]
+    ).rename(
+        index={True: "true", False: "false"},
+        columns={True: "case", False: "control"},
+    )
+    stat_result = make_catgorical_stat_results(crosstab)
+    subsection = StatSubSection("Event", crosstab, stat_result)
+    subsections.append(subsection)
+
+    # covariate
+    covariates = [
+    "hypertension",
+    "heart_type_disease",
+    "neurological_type_disease",
+    "diabetes",
+    "hyperlipidemia",
+    ]
+
+    drug_cols = [
+    "aspirin",
+    "warfarin",
+    "clopidogrel",
+    "apixaban",
+    "rivaroxaban",
+    "dabigatran etexilate",
+    "cilostazol",
+    "enoxaparin",
+    ]
+    drug_statistics_cols = []
+    drug_statistics = ['median','count','max','mean','min',
+                       'hours_diff_mean','hours_diff_max','hours_diff_min','hours_diff_median']
+
+    design_matrix.attrs["with_covariate_cols"] = [f"with_{c}" for c in covariates]
+    design_matrix.attrs["covariate_times_cols"] = [f"{c}_times" for c in covariates]
+    cols = design_matrix.attrs["with_covariate_cols"]
+
+    design_matrix.attrs["drug_name_cols"] = drug_cols
+    drug_cols = design_matrix.attrs["drug_name_cols"]
+
+    for drug in drug_cols:
+        for stat in drug_statistics:
+            drug_statistics_cols.append(f"{drug}_{stat}")
+
+    design_matrix.attrs["drug_statistics_cols"] = drug_statistics_cols
+
+    for col in cols:
+        subheader = col.replace("_", " ").title()
+        crosstab = pd.crosstab(design_matrix[col], design_matrix[predictor_col]).rename(
+            index={True: "with", False: "without"},
+            columns={True: "case", False: "control"},
+        )
+        stat_result = make_catgorical_stat_results(crosstab)
+        subsection = StatSubSection(subheader, crosstab, stat_result)
+        subsections.append(subsection)
+
+    for cs in drug_cols:
+        subheader = cs.title()
+
+        # Calculate the basic crosstab for this drug
+        crosstab = pd.crosstab(design_matrix[cs], design_matrix[predictor_col]).rename(
+            index={True: "true", False: "false"},
+            columns={True: "case", False: "control"},
+        )
+        stat_result = make_catgorical_stat_results(crosstab)
+        subsection = StatSubSection(subheader, crosstab, stat_result)
+        subsections.append(subsection)
+
+        # Filter data containing this drug
+        filtered_design_matrix = design_matrix[design_matrix[cs]]
+
+        # Process all statistical results for this drug
+        for stat in drug_statistics:
+            drug_stat_col = f"{cs}_{stat}"
+
+            if drug_stat_col in drug_statistics_cols:
+                subheader = drug_stat_col.replace("_", " ").title()
+
+                # Calculate the grouped data for this statistic
+                crosstab = (
+                    filtered_design_matrix.groupby(predictor_col)[drug_stat_col]
+                    .agg(("mean", "std"))
+                    .transpose()
+                    .rename(
+                        index={"mean": "Mean", "std": "Std"},
+                        columns={True: "case", False: "control"}
+                    )
+                )
+
+                # Calculate statistical results (e.g., t-test, U-test)
+                case, control = t_u_ks_statistics_3(cs, stat)
+                stat_result = make_catgorical_stat_results_3(case, control)
+
+                # Add to report
+                subsection = StatSubSection(subheader, crosstab, stat_result)
+                subsections.append(subsection)
+
+    return subsections
+
+def show_stat_section(subsections: list[StatSubSection]) -> None:
+    format_dict = {'stat': '{:.4f}', 'p': '{:.4f}'}
+    drug_keywords = {"Aspirin", "Warfarin", "Clopidogrel", "Apixaban", "Rivaroxaban",
+                     "Dabigatran Etexilate", "Cilostazol", "Enoxaparin"}
+    exclude_headers = ["Gender", "Event", "With Hypertension", "With Heart Type Disease",
+                       "With Neurological Type Disease", "With Diabetes", "With Hyperlipidemia",
+                       "Aspirin", "Warfarin", "Clopidogrel", "Apixaban", "Rivaroxaban",
+                       "Dabigatran Etexilate", "Cilostazol", "Enoxaparin"]
+    st.markdown("")
+    st.header("Independence Tests")
+
+    # Determine whether it is a drug-related title
+    def is_drug_related(subheader: str) -> bool:
+        return any(keyword in subheader for keyword in drug_keywords)
+
+    # Grouping drugs and non-drugs
+    grouped = groupby(subsections, lambda s: is_drug_related(s.subheader))
+
+    for is_drug, group in grouped:
+        group = list(group)  # Convert group to list for multiple iterations
+        if is_drug:
+            st.markdown("---")
+            st.header("Drug Independence Tests")
+
+        # Arrange table in pairs
+        for two_subsections in chunked(group, 2):
+            cols = st.columns(2)  # Fixed two columns
+            for stcol, subsection in zip(cols, two_subsections):
+                stcol.subheader(subsection.subheader)
+
+                # Determine whether a percentage needs to be calculated
+                if subsection.subheader in exclude_headers:
+                    crosstab_with_percentage = subsection.crosstab.copy()
+                    total = crosstab_with_percentage.sum(axis=0, skipna=True)
+                    crosstab_with_percentage = crosstab_with_percentage.applymap(
+                        lambda x: f"{int(x):,}"  # Format non-floating point numbers as three-digit commas
+                    )
+                    percentage = (subsection.crosstab.div(total, axis=1) * 100).round(1).astype(str) + '%'
+                    crosstab_with_percentage = crosstab_with_percentage + ' (' + percentage + ')'
+                    stcol.table(crosstab_with_percentage)
+                else:
+                    # Format original crosstab
+                    formatted_crosstab = subsection.crosstab.applymap(
+                        lambda x: f"{x:,.4f}" if isinstance(x, float) else f"{int(x):,}"
+                    )
+                    stcol.table(formatted_crosstab)
+
+                # Show statistical results table
+                stcol.table(
+                    subsection.stat_result.style.format(format_dict).pipe(format_small_values).pipe(
+                        highlight_small_p
+                    )
+                )
+            # If there is one table left, put it on the left side of a column alone.
+            if len(two_subsections) < 2:
+                cols[1].empty()  # Leave the right column blank
+    st.markdown("---")
 
 if __name__ == "__main__":
-    (
-        read_design_matrix,
-        filter_gender,
-        filter_age,
-        crop_event,
-    ) = import_funcs_from_statistical_analysis()
+    # Manually set a hidden anchor point
+    st.markdown('<div id="section-1"></div>', unsafe_allow_html=True)
+
+    # Ignore RuntimeWarning. During a comprehensive inspection, this line must be removed first and then checked.
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
+
     design_matrix = (
         read_design_matrix().pipe(filter_gender).pipe(filter_age).pipe(crop_event)
     )
-
-    data_copy = design_matrix.copy()
-    # Cut to columns of specified range
-    design_matrix_df = data_copy.loc[:, 'gender':'hyperlipidemia_times']
-
-    # Manually set a hidden anchor point
-    st.markdown('<div id="section-1"></div>', unsafe_allow_html=True)
-    show_km_section(*make_km_section(design_matrix))
-    show_deconstructing_logrank_section(
-        make_deconstructing_logrank_section(design_matrix)
-    )
-
-    st.header("Proportional Hazard Model")
-    show_cox_section(*make_cox_section(design_matrix_df))
-    show_data_view_section(*make_data_view_section(design_matrix))
+    show_stat_section(make_stat_section(design_matrix))
 
     # Add a "Back to Top" button fixed in the lower right corner
     st.markdown("""
