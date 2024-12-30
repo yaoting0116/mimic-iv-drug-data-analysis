@@ -128,21 +128,24 @@ def filter_age(design_matrix: pd.DataFrame) -> pd.DataFrame:
 
 def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
     max_duration = design_matrix.attrs["max_duration"]
-    lower, upper = st.sidebar.slider(
-        "duration",
-        min_value=0,
+    upper = st.sidebar.slider(
+        "duration",  # Description text displayed
+        min_value=1,  # Fixed starting from 1
         max_value=max_duration,
-        value=(0, max_duration),
+        value=max_duration,  # Default is maximum
         step=90,
     )
 
+    # Fixed lower to 1
+    lower = 1
+
     # assemble thresholds of duration to event column
-    if not (0 <= lower < upper <= max_duration):
+    if not (1 <= lower < upper <= max_duration):  # Make sure the range is correct
         st.error("Please select the correct threshold for duration.")
         st.stop()
-    if lower == 0 and upper == max_duration:
+    if lower == 1 and upper == max_duration:  # When lower is 1, it is considered the default
         event_col = "E"
-    elif lower == 0 and upper > 0:
+    elif lower == 1 and upper > 1:
         event_col = f"E{upper}"
     else:
         event_col = f"E{lower}-{upper}"
