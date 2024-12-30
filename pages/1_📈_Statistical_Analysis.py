@@ -128,13 +128,9 @@ def filter_age(design_matrix: pd.DataFrame) -> pd.DataFrame:
 
 def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
     max_duration = design_matrix.attrs["max_duration"]
-    upper = st.sidebar.slider(
-        "duration",  # Description text displayed
-        min_value=1,  # Fixed starting from 1
-        max_value=max_duration,
-        value=max_duration,  # Default is maximum
-        step=90,
-    )
+    
+    # You can hide the slider by not rendering it, or using a hidden input
+    upper = max_duration  # Set it directly to max_duration, no need for a slider
 
     # Fixed lower to 1
     lower = 1
@@ -143,6 +139,7 @@ def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
     if not (1 <= lower < upper <= max_duration):  # Make sure the range is correct
         st.error("Please select the correct threshold for duration.")
         st.stop()
+    
     if lower == 1 and upper == max_duration:  # When lower is 1, it is considered the default
         event_col = "E"
     elif lower == 1 and upper > 1:
@@ -164,6 +161,7 @@ def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
         # Find the index position of column "E" and insert the new column after it
         e_col_index = design_matrix.columns.get_loc("E") + 1
         design_matrix.insert(e_col_index, event_col, design_matrix.pop(event_col))
+    
     return design_matrix
 
 @dataclass
