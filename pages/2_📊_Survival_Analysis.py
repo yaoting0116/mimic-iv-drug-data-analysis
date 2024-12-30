@@ -10,6 +10,7 @@ from scipy.stats import chi2_contingency
 from pandas.io.formats.style import Styler
 from enum import Enum
 
+
 def to_percentage(df: pd.DataFrame) -> Styler:
     return df.apply(lambda col: col / col.sum()).mul(100).round(1).style.format("{}%")
 
