@@ -60,7 +60,7 @@ def read_design_matrix() -> pd.DataFrame:
         "Psychosis & Hemorrhagic Stroke": "Hemorrhagic_Stroke_join_drug_V5",
     }
     if "topic_index" not in st.session_state:
-        st.session_state["topic_index"] = 1
+        st.session_state["topic_index"] = 0
 
     def on_change() -> None:
         topic_selected = st.session_state["topic-radio"]
