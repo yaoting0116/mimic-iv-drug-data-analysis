@@ -669,23 +669,23 @@ if __name__ == "__main__":
     # anchor button
     # Add a "Back to Top" button fixed in the lower right corner
     st.markdown("""
-        <style>
-        #go-top-button {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            cursor: pointer;
-            border-radius: 5px;
-            font-size: 14px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-            z-index: 9999;
-        }
-        </style>
-        <a href="#section-1">
-            <button id="go-top-button">Back to Top</button>
-        </a>
+    <style>
+    #go-top-button {
+        position: fixed;
+        bottom: 60px; /*Adjust this to change the distance of the button from the bottom*/
+        right: 20px;
+        background-color: #007BFF;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        border-radius: 5px;
+        font-size: 14px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+    }
+    </style>
+    <a href="#section-1">
+        <button id="go-top-button">Back to Top</button>
+    </a>
     """, unsafe_allow_html=True)
