@@ -17,7 +17,7 @@ The changes include updates to the dataset, removal of some original code, and a
 
 ## Live Demo
 
-This project is based on the original work by [Sunrimii].(https://github.com/sunrimii/mimic-iv-data-analysis/tree/master). I would like to express my gratitude to the original author for providing an excellent foundation, as their code and ideas were instrumental in creating this updated version.
+This project is based on the original work by [Sunrimii](https://github.com/sunrimii/mimic-iv-data-analysis/tree/master). I would like to express my gratitude to the original author for providing an excellent foundation, as their code and ideas were instrumental in creating this updated version.
 
 For the original project's [live demo](https://sunrimii-mimic-iv-data-analysis-0--introduction-yx89v6.streamlitapp.com/), see here.
 
