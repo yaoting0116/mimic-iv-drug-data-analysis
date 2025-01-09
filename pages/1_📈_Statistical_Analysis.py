@@ -85,7 +85,6 @@ def read_design_matrix() -> pd.DataFrame:
 
     return design_matrix
 
-
 def filter_gender(design_matrix: pd.DataFrame) -> pd.DataFrame:
     if "gender_index" not in st.session_state:
         st.session_state["gender_index"] = 0
