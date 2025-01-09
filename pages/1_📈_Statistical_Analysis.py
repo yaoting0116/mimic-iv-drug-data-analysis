@@ -112,14 +112,21 @@ def filter_gender(design_matrix: pd.DataFrame) -> pd.DataFrame:
         case _:
             raise AttributeError
 
-def filter_age(design_matrix: pd.DataFrame) -> pd.DataFrame:
+def filter_age(design_matrix: pd.DataFrame, min_gap: int = 25) -> pd.DataFrame:
     if "age_threshold" not in st.session_state:
-        st.session_state["age_threshold"] = 18, 110
+        st.session_state["age_threshold"] = (18, 110)
 
     def on_change() -> None:
-        st.session_state["age_threshold"] = st.session_state["age-slider"]
+        lower, upper = st.session_state["age-slider"]
+        # Make sure the slider has at least min_gap gap
+        if upper - lower < min_gap:
+            st.error(f"The slider range must be at least {min_gap} years.")
+            # Restore to previous legal scope
+            st.session_state["age-slider"] = st.session_state["age_threshold"]
+        else:
+            st.session_state["age_threshold"] = st.session_state["age-slider"]
 
-    age_threshold: tuple[int, int] = st.sidebar.slider(
+    age_threshold = st.sidebar.slider(
         "age",
         min_value=18,
         max_value=110,
@@ -127,26 +134,43 @@ def filter_age(design_matrix: pd.DataFrame) -> pd.DataFrame:
         key="age-slider",
         on_change=on_change,
     )
-    return design_matrix.query(f"{age_threshold[0]} <= age <= {age_threshold[1]}")
+    
+    # Filter data within a set range
+    filtered_data = design_matrix.query(f"{age_threshold[0]} <= age <= {age_threshold[1]}")
+    
+    return filtered_data
 
-def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
+def crop_event(design_matrix: pd.DataFrame, min_gap: int = 90) -> pd.DataFrame:
+    if "duration_threshold" not in st.session_state:
+        # Initialize the valid range as (1, max_duration)
+        st.session_state["duration_threshold"] = (1, design_matrix.attrs["max_duration"])
+
+    def on_change() -> None:
+        lower, upper = 1, st.session_state["duration-slider"]
+        max_duration = design_matrix.attrs["max_duration"]
+        # Ensure the range is valid and has at least min_gap
+        if upper - lower < min_gap or not (1 <= upper <= max_duration):
+            st.error(f"The upper limit must be at least {min_gap} and within the range 1 to 4684.")
+            # Revert to the previous valid range
+            st.session_state["duration-slider"] = st.session_state["duration_threshold"][1]
+        else:
+            # Update the valid range
+            st.session_state["duration_threshold"] = (1, upper)
+
     max_duration = design_matrix.attrs["max_duration"]
     upper = st.sidebar.slider(
-        "duration",  # Description text displayed
-        min_value=1,  # Fixed starting from 1
+        "duration",
+        min_value=1,
         max_value=max_duration,
-        value=max_duration,  # Default is maximum
+        value=st.session_state["duration_threshold"][1],
         step=90,
+        key="duration-slider",
+        on_change=on_change,
     )
 
-    # Fixed lower to 1
-    lower = 1
-
-    # assemble thresholds of duration to event column
-    if not (1 <= lower < upper <= max_duration):  # Make sure the range is correct
-        st.error("Please select the correct threshold for duration.")
-        st.stop()
-    if lower == 1 and upper == max_duration:  # When lower is 1, it is considered the default
+    lower, upper = 1, upper  # Lower limit is fixed at 1, only the upper limit is adjustable by the user
+    # Set the event column name
+    if lower == 1 and upper == max_duration:
         event_col = "E"
     elif lower == 1 and upper > 1:
         event_col = f"E{upper}"
@@ -154,8 +178,7 @@ def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
         event_col = f"E{lower}-{upper}"
     design_matrix.attrs["event_col"] = event_col
 
-    # E is original event column. If threshold isn't the default, add additional event
-    # column such as E90 or E91-180.
+    # Process the event column
     if event_col != "E":
         design_matrix[event_col] = False
         design_matrix.loc[
@@ -164,7 +187,7 @@ def crop_event(design_matrix: pd.DataFrame) -> pd.DataFrame:
             & (design_matrix["T"] <= upper),
             event_col,
         ] = True
-        # Find the index position of column "E" and insert the new column after it
+        # Find the index of column "E" and insert the new column after it
         e_col_index = design_matrix.columns.get_loc("E") + 1
         design_matrix.insert(e_col_index, event_col, design_matrix.pop(event_col))
     return design_matrix
