@@ -9,7 +9,7 @@ This analysis uses the publicly available medical dataset MIMIC, which contains 
 
 ### Topics
 
-Various statistical methods were used to verify whether patients with severe mental illness were hospitalized for ischemic or hemorrhagic stroke, and to explore the effects of specific medications on their rehospitalization.
+Various statistical methods were used to verify whether patients with severe mental illness were hospitalized for ischemic or hemorrhagic stroke, and to explore the effects of specific medications on the hospitalized patients.
 
 ### Methods
 
