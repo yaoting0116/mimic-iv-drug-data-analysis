@@ -56,10 +56,10 @@ class Gender(StreamlitEnum):
 
 def read_design_matrix() -> pd.DataFrame:
     topic_to_pickle_fname = {
-        "Psychosis & Ischemic Stroke": "Ischemic_Stroke_join_drug_V5",
-        "Psychosis & Ischemic Stroke eliminating sampled patients whose hospitalization may be due to cerebrovascular diseases": "Ischemic_Stroke_join_drug_V4_T_1day",
-        "Psychosis & Hemorrhagic Stroke": "Hemorrhagic_Stroke_join_drug_V5",
-        "Psychosis & Hemorrhagic Stroke eliminating sampled patients whose hospitalization may be due to cerebrovascular diseases": "Hemorrhagic_Stroke_join_drug_V4_T_1day",
+        "Psychosis vs. Ischemic Stroke": "Ischemic_Stroke_join_drug_V5",
+        "Psychosis vs. Ischemic Stroke eliminating sampled patients whose hospitalization may be due to cerebrovascular diseases": "Ischemic_Stroke_join_drug_V4_T_1day",
+        "Psychosis vs. Hemorrhagic Stroke": "Hemorrhagic_Stroke_join_drug_V5",
+        "Psychosis vs. Hemorrhagic Stroke eliminating sampled patients whose hospitalization may be due to cerebrovascular diseases": "Hemorrhagic_Stroke_join_drug_V4_T_1day",
     }
     if "topic_index" not in st.session_state:
         st.session_state["topic_index"] = 0
