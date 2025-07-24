@@ -76,7 +76,7 @@ def read_design_matrix() -> pd.DataFrame:
         key="topic-radio",  # to identify widgets on session state
         on_change=on_change,
     )
-    design_matrix = pd.read_pickle(f"C:/Users/user/Desktop/MIMIC/正式論文 V2/SQL資料前處理_對照組去除所有精神疾病_V2\MIMIC原檔測試 V2/mimic-iv-data-analysis-master/data/{topic_to_pickle_fname[topic_selected]}.pkl", compression='gzip') # Your own folder path
+    design_matrix = pd.read_pickle(f"data/{topic_to_pickle_fname[topic_selected]}.pkl", compression='gzip') # Your own folder path
 
     # for slider usage
     design_matrix.attrs["max_duration"] = int(design_matrix["T"].max())
